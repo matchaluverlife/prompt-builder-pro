@@ -90,10 +90,8 @@ const MataKuliahPage = () => {
                   >
                     <td className="py-4 px-4 text-sm font-medium text-primary">{mk.kode}</td>
                     <td className="py-4 px-4 text-sm font-medium text-foreground">{mk.nama}</td>
-                    <td className="py-4 px-4">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent">
+                    <td className="py-4 px-4 text-sm font-medium text-foreground">
                         {mk.sks} SKS
-                      </span>
                     </td>
                     <td className="py-4 px-4 text-sm text-foreground">Semester {mk.semester}</td>
                     <td className="py-4 px-4 text-sm text-muted-foreground">{mk.dosen}</td>
