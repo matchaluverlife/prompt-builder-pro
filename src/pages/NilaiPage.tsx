@@ -1,29 +1,60 @@
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { nilaiData, mahasiswaData, mataKuliahData } from '@/data/mockData';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { Search, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+
+interface NilaiWithRelations {
+  id: string;
+  nilai_angka: number;
+  nilai_huruf: string;
+  semester: string;
+  tahun_ajaran: string;
+  mahasiswa: {
+    nim: string;
+    nama: string;
+  };
+  mata_kuliah: {
+    kode: string;
+    nama: string;
+  };
+}
 
 const NilaiPage = () => {
   const [search, setSearch] = useState('');
+  const [data, setData] = useState<NilaiWithRelations[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const enrichedData = nilaiData.map(nilai => {
-    const mahasiswa = mahasiswaData.find(m => m.id === nilai.mahasiswaId);
-    const mataKuliah = mataKuliahData.find(mk => mk.id === nilai.mataKuliahId);
-    return {
-      ...nilai,
-      namaMahasiswa: mahasiswa?.nama || '-',
-      nimMahasiswa: mahasiswa?.nim || '-',
-      namaMataKuliah: mataKuliah?.nama || '-',
-      kodeMataKuliah: mataKuliah?.kode || '-',
-    };
-  });
+  const fetchData = async () => {
+    setIsLoading(true);
+    const { data: nilai, error } = await supabase
+      .from('nilai')
+      .select(`
+        id,
+        nilai_angka,
+        nilai_huruf,
+        semester,
+        tahun_ajaran,
+        mahasiswa:mahasiswa_id (nim, nama),
+        mata_kuliah:mata_kuliah_id (kode, nama)
+      `)
+      .order('created_at', { ascending: false });
+    
+    if (!error && nilai) {
+      setData(nilai as unknown as NilaiWithRelations[]);
+    }
+    setIsLoading(false);
+  };
 
-  const filteredData = enrichedData.filter(n => 
-    n.namaMahasiswa.toLowerCase().includes(search.toLowerCase()) ||
-    n.nimMahasiswa.includes(search) ||
-    n.namaMataKuliah.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const filteredData = data.filter(n => 
+    n.mahasiswa?.nama?.toLowerCase().includes(search.toLowerCase()) ||
+    n.mahasiswa?.nim?.includes(search) ||
+    n.mata_kuliah?.nama?.toLowerCase().includes(search.toLowerCase())
   );
 
   const getNilaiColor = (huruf: string) => {
@@ -54,50 +85,60 @@ const NilaiPage = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/50">
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">NIM</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Nama Mahasiswa</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Mata Kuliah</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Nilai</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Semester</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Tahun Ajaran</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.map((nilai, index) => (
-                <tr 
-                  key={nilai.id} 
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors animate-fade-in"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <td className="py-4 px-4 text-sm font-medium text-primary">{nilai.nimMahasiswa}</td>
-                  <td className="py-4 px-4 text-sm font-medium text-foreground">{nilai.namaMahasiswa}</td>
-                  <td className="py-4 px-4 text-sm text-foreground">
-                    <span className="text-muted-foreground text-xs">{nilai.kodeMataKuliah}</span>
-                    <br />
-                    {nilai.namaMataKuliah}
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{nilai.nilaiAngka}</span>
-                      <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getNilaiColor(nilai.nilaiHuruf))}>
-                        {nilai.nilaiHuruf}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4 text-sm text-muted-foreground">{nilai.semester}</td>
-                  <td className="py-4 px-4 text-sm text-muted-foreground">{nilai.tahunAjaran}</td>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              {data.length === 0 ? 'Belum ada data nilai' : 'Tidak ada hasil pencarian'}
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">NIM</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Nama Mahasiswa</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Mata Kuliah</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Nilai</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Semester</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Tahun Ajaran</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredData.map((nilai, index) => (
+                  <tr 
+                    key={nilai.id} 
+                    className="border-b border-border/50 hover:bg-muted/30 transition-colors animate-fade-in"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <td className="py-4 px-4 text-sm font-medium text-primary">{nilai.mahasiswa?.nim || '-'}</td>
+                    <td className="py-4 px-4 text-sm font-medium text-foreground">{nilai.mahasiswa?.nama || '-'}</td>
+                    <td className="py-4 px-4 text-sm text-foreground">
+                      <span className="text-muted-foreground text-xs">{nilai.mata_kuliah?.kode || '-'}</span>
+                      <br />
+                      {nilai.mata_kuliah?.nama || '-'}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">{nilai.nilai_angka}</span>
+                        <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getNilaiColor(nilai.nilai_huruf))}>
+                          {nilai.nilai_huruf}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-sm text-muted-foreground">{nilai.semester}</td>
+                    <td className="py-4 px-4 text-sm text-muted-foreground">{nilai.tahun_ajaran}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
         
         <div className="p-4 border-t border-border bg-muted/30">
           <p className="text-sm text-muted-foreground">
-            Menampilkan {filteredData.length} dari {nilaiData.length} data nilai
+            Menampilkan {filteredData.length} dari {data.length} data nilai
           </p>
         </div>
       </div>
