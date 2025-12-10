@@ -1,26 +1,108 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { preprocessedData, mahasiswaData } from '@/data/mockData';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { Search, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+
+interface PreprocessedStudent {
+  id: string;
+  nim: string;
+  nama: string;
+  jurusan: string;
+  ipk: number;
+  totalSks: number;
+  rataRataNilai: number;
+  kategoriPrestasi: string;
+}
 
 const PreprocessingPage = () => {
   const [search, setSearch] = useState('');
+  const [data, setData] = useState<PreprocessedStudent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const enrichedData = preprocessedData.map(data => {
-    const mahasiswa = mahasiswaData.find(m => m.id === data.mahasiswaId);
-    return {
-      ...data,
-      namaMahasiswa: mahasiswa?.nama || '-',
-      nimMahasiswa: mahasiswa?.nim || '-',
-      jurusan: mahasiswa?.jurusan || '-',
+  const fetchAndProcessData = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch all mahasiswa
+      const { data: mahasiswaList, error: mahasiswaError } = await supabase
+        .from('mahasiswa')
+        .select('*');
+
+      if (mahasiswaError) throw mahasiswaError;
+
+      // Fetch all nilai with mata_kuliah for SKS
+      const { data: nilaiList, error: nilaiError } = await supabase
+        .from('nilai')
+        .select(`
+          *,
+          mata_kuliah:mata_kuliah_id(sks)
+        `);
+
+      if (nilaiError) throw nilaiError;
+
+      // Process data for each student
+      const processedData: PreprocessedStudent[] = (mahasiswaList || []).map(mhs => {
+        const studentNilai = (nilaiList || []).filter(n => n.mahasiswa_id === mhs.id);
+        
+        let totalBobot = 0;
+        let totalSks = 0;
+        let totalNilai = 0;
+
+        studentNilai.forEach(n => {
+          const sks = n.mata_kuliah?.sks || 0;
+          const bobot = getBobot(n.nilai_huruf);
+          totalBobot += bobot * sks;
+          totalSks += sks;
+          totalNilai += n.nilai_angka;
+        });
+
+        const ipk = totalSks > 0 ? totalBobot / totalSks : 0;
+        const rataRataNilai = studentNilai.length > 0 ? totalNilai / studentNilai.length : 0;
+        const kategoriPrestasi = getKategori(ipk);
+
+        return {
+          id: mhs.id,
+          nim: mhs.nim,
+          nama: mhs.nama,
+          jurusan: mhs.jurusan,
+          ipk,
+          totalSks,
+          rataRataNilai,
+          kategoriPrestasi,
+        };
+      });
+
+      setData(processedData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getBobot = (nilaiHuruf: string): number => {
+    const bobotMap: Record<string, number> = {
+      'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+      'C+': 2.3, 'C': 2.0, 'C-': 1.7, 'D+': 1.3, 'D': 1.0, 'E': 0
     };
-  });
+    return bobotMap[nilaiHuruf] || 0;
+  };
 
-  const filteredData = enrichedData.filter(d => 
-    d.namaMahasiswa.toLowerCase().includes(search.toLowerCase()) ||
-    d.nimMahasiswa.includes(search)
+  const getKategori = (ipk: number): string => {
+    if (ipk >= 3.5) return 'Sangat Baik';
+    if (ipk >= 3.0) return 'Baik';
+    if (ipk >= 2.5) return 'Cukup';
+    return 'Kurang';
+  };
+
+  useEffect(() => {
+    fetchAndProcessData();
+  }, []);
+
+  const filteredData = data.filter(d => 
+    d.nama.toLowerCase().includes(search.toLowerCase()) ||
+    d.nim.includes(search)
   );
 
   const getKategoriColor = (kategori: string) => {
@@ -52,50 +134,60 @@ const PreprocessingPage = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/50">
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">NIM</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Nama</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Jurusan</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">IPK</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Total SKS</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Rata-rata Nilai</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Kategori</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.map((data, index) => (
-                <tr 
-                  key={data.id} 
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors animate-fade-in"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <td className="py-4 px-4 text-sm font-medium text-primary">{data.nimMahasiswa}</td>
-                  <td className="py-4 px-4 text-sm font-medium text-foreground">{data.namaMahasiswa}</td>
-                  <td className="py-4 px-4 text-sm text-muted-foreground">{data.jurusan}</td>
-                  <td className="py-4 px-4 text-sm font-bold text-foreground">{data.ipk.toFixed(2)}</td>
-                  <td className="py-4 px-4">
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent">
-                      {data.totalSks} SKS
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-sm text-foreground">{data.rataRataNilai.toFixed(2)}</td>
-                  <td className="py-4 px-4">
-                    <span className={cn("px-3 py-1 rounded-full text-xs font-medium", getKategoriColor(data.kategoriPrestasi))}>
-                      {data.kategoriPrestasi}
-                    </span>
-                  </td>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : filteredData.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            {data.length === 0 ? 'Belum ada data mahasiswa' : 'Tidak ada hasil pencarian'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">NIM</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Nama</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Jurusan</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">IPK</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Total SKS</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Rata-rata Nilai</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Kategori</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredData.map((item, index) => (
+                  <tr 
+                    key={item.id} 
+                    className="border-b border-border/50 hover:bg-muted/30 transition-colors animate-fade-in"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <td className="py-4 px-4 text-sm font-medium text-primary">{item.nim}</td>
+                    <td className="py-4 px-4 text-sm font-medium text-foreground">{item.nama}</td>
+                    <td className="py-4 px-4 text-sm text-muted-foreground">{item.jurusan}</td>
+                    <td className="py-4 px-4 text-sm font-bold text-foreground">{item.ipk.toFixed(2)}</td>
+                    <td className="py-4 px-4">
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent">
+                        {item.totalSks} SKS
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-sm text-foreground">{item.rataRataNilai.toFixed(2)}</td>
+                    <td className="py-4 px-4">
+                      <span className={cn("px-3 py-1 rounded-full text-xs font-medium", getKategoriColor(item.kategoriPrestasi))}>
+                        {item.kategoriPrestasi}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         
         <div className="p-4 border-t border-border bg-muted/30">
           <p className="text-sm text-muted-foreground">
-            Menampilkan {filteredData.length} dari {preprocessedData.length} data preprocessing
+            Menampilkan {filteredData.length} dari {data.length} data preprocessing
           </p>
         </div>
       </div>
