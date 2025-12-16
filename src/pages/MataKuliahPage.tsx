@@ -1,8 +1,21 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Input } from '@/components/ui/input';
-import { Search, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface MataKuliah {
   id: string;
@@ -17,6 +30,7 @@ const MataKuliahPage = () => {
   const [search, setSearch] = useState('');
   const [data, setData] = useState<MataKuliah[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -40,6 +54,16 @@ const MataKuliahPage = () => {
     mk.kode.toLowerCase().includes(search.toLowerCase()) ||
     mk.dosen.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleDelete = async (id: string, nama: string) => {
+    const { error } = await supabase.from('mata_kuliah').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: 'Gagal menghapus data', variant: 'destructive' });
+    } else {
+      toast({ title: 'Berhasil', description: `Mata kuliah ${nama} berhasil dihapus` });
+      fetchData();
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -79,6 +103,7 @@ const MataKuliahPage = () => {
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">SKS</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Semester</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Dosen Pengampu</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -95,6 +120,27 @@ const MataKuliahPage = () => {
                     </td>
                     <td className="py-4 px-4 text-sm text-foreground">Semester {mk.semester}</td>
                     <td className="py-4 px-4 text-sm text-muted-foreground">{mk.dosen}</td>
+                    <td className="py-4 px-4">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Hapus Mata Kuliah</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Apakah Anda yakin ingin menghapus mata kuliah {mk.nama}? Tindakan ini tidak dapat dibatalkan.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(mk.id, mk.nama)}>Hapus</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -1,9 +1,22 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Input } from '@/components/ui/input';
-import { Search, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface NilaiWithRelations {
   id: string;
@@ -25,6 +38,7 @@ const NilaiPage = () => {
   const [search, setSearch] = useState('');
   const [data, setData] = useState<NilaiWithRelations[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -56,6 +70,16 @@ const NilaiPage = () => {
     n.mahasiswa?.nim?.includes(search) ||
     n.mata_kuliah?.nama?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleDelete = async (id: string, mahasiswaNama: string) => {
+    const { error } = await supabase.from('nilai').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: 'Gagal menghapus data', variant: 'destructive' });
+    } else {
+      toast({ title: 'Berhasil', description: `Nilai ${mahasiswaNama} berhasil dihapus` });
+      fetchData();
+    }
+  };
 
   const getNilaiColor = (huruf: string) => {
     if (huruf.startsWith('A')) return 'bg-success/10 text-success';
@@ -103,6 +127,7 @@ const NilaiPage = () => {
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Nilai</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Semester</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Tahun Ajaran</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -129,6 +154,27 @@ const NilaiPage = () => {
                     </td>
                     <td className="py-4 px-4 text-sm text-muted-foreground">{nilai.semester}</td>
                     <td className="py-4 px-4 text-sm text-muted-foreground">{nilai.tahun_ajaran}</td>
+                    <td className="py-4 px-4">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Hapus Data Nilai</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Apakah Anda yakin ingin menghapus nilai {nilai.mahasiswa?.nama || 'ini'}? Tindakan ini tidak dapat dibatalkan.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(nilai.id, nilai.mahasiswa?.nama || '')}>Hapus</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </td>
                   </tr>
                 ))}
               </tbody>
