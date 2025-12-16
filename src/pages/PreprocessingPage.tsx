@@ -1,9 +1,22 @@
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Input } from '@/components/ui/input';
-import { Search, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Loader2, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface PreprocessedStudent {
   id: string;
@@ -20,6 +33,7 @@ const PreprocessingPage = () => {
   const [search, setSearch] = useState('');
   const [data, setData] = useState<PreprocessedStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   const fetchAndProcessData = async () => {
     setIsLoading(true);
@@ -105,6 +119,16 @@ const PreprocessingPage = () => {
     d.nim.includes(search)
   );
 
+  const handleDelete = async (id: string, nama: string) => {
+    const { error } = await supabase.from('mahasiswa').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: 'Gagal menghapus data', variant: 'destructive' });
+    } else {
+      toast({ title: 'Berhasil', description: `Data ${nama} berhasil dihapus` });
+      fetchAndProcessData();
+    }
+  };
+
   const getKategoriColor = (kategori: string) => {
     switch (kategori) {
       case 'Sangat Baik': return 'bg-success/10 text-success';
@@ -154,6 +178,7 @@ const PreprocessingPage = () => {
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Total SKS</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Rata-rata Nilai</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Kategori</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,6 +202,27 @@ const PreprocessingPage = () => {
                       <span className={cn("px-3 py-1 rounded-full text-xs font-medium", getKategoriColor(item.kategoriPrestasi))}>
                         {item.kategoriPrestasi}
                       </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Hapus Data Mahasiswa</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Apakah Anda yakin ingin menghapus data {item.nama}? Semua data nilai terkait juga akan terhapus. Tindakan ini tidak dapat dibatalkan.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(item.id, item.nama)}>Hapus</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </td>
                   </tr>
                 ))}
