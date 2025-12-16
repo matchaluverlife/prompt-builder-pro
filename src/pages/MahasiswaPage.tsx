@@ -1,8 +1,21 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Input } from '@/components/ui/input';
-import { Search, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface Mahasiswa {
   id: string;
@@ -17,6 +30,7 @@ const MahasiswaPage = () => {
   const [search, setSearch] = useState('');
   const [data, setData] = useState<Mahasiswa[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -40,6 +54,16 @@ const MahasiswaPage = () => {
     mhs.nim.includes(search) ||
     mhs.jurusan.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleDelete = async (id: string, nama: string) => {
+    const { error } = await supabase.from('mahasiswa').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: 'Gagal menghapus data', variant: 'destructive' });
+    } else {
+      toast({ title: 'Berhasil', description: `Data ${nama} berhasil dihapus` });
+      fetchData();
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -79,6 +103,7 @@ const MahasiswaPage = () => {
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Email</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Jurusan</th>
                   <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Angkatan</th>
+                  <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -96,6 +121,27 @@ const MahasiswaPage = () => {
                       <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                         {mhs.angkatan}
                       </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Hapus Data Mahasiswa</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Apakah Anda yakin ingin menghapus data {mhs.nama}? Tindakan ini tidak dapat dibatalkan.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(mhs.id, mhs.nama)}>Hapus</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </td>
                   </tr>
                 ))}
